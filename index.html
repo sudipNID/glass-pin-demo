@@ -14,20 +14,39 @@
 }
 
 body{
-    background:#020202;
-    height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
+    background:#000;
     overflow:hidden;
-    color:white;
+    height:100vh;
 }
 
+/* Rear Camera */
+#camera{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    z-index:0;
+}
+
+/* Dark overlay to simulate glasses */
+#overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.75);
+    z-index:1;
+}
+
+/* HUD */
 #hud{
+    position:fixed;
+    inset:0;
     display:flex;
     flex-direction:column;
+    justify-content:center;
     align-items:center;
     gap:35px;
+    z-index:2;
 }
 
 #pinDots{
@@ -46,46 +65,37 @@ body{
     position:relative;
     width:min(92vw,900px);
     height:90px;
-
     border-radius:45px;
-
-    border:2px solid rgba(130,170,255,.6);
-
-    background:rgba(255,255,255,.04);
-
-    box-shadow:
-        0 0 18px rgba(92,150,255,.35),
-        inset 0 0 30px rgba(255,255,255,.03);
+    border:2px solid rgba(130,170,255,.7);
+    background:rgba(255,255,255,.05);
+    backdrop-filter:blur(10px);
 
     display:flex;
     justify-content:space-evenly;
     align-items:center;
+
+    box-shadow:
+        0 0 20px rgba(90,160,255,.35);
 }
 
 .number{
+    color:white;
     font-size:38px;
-    color:#dfe7ff;
     z-index:2;
 }
 
 #selector{
     position:absolute;
-
     left:8px;
-
     width:74px;
     height:74px;
-
     border-radius:24px;
 
-    background:
-        radial-gradient(circle,#a86cff,#5aa8ff);
-
-    opacity:.95;
+    background:linear-gradient(180deg,#6db8ff,#b06dff);
 
     box-shadow:
-        0 0 30px #8d5cff,
-        0 0 60px #5aa8ff;
+        0 0 25px #6da8ff,
+        0 0 45px #a66cff;
 
     z-index:1;
 }
@@ -94,6 +104,10 @@ body{
 </head>
 
 <body>
+
+<video id="camera" autoplay playsinline muted></video>
+
+<div id="overlay"></div>
 
 <div id="hud">
 
@@ -123,6 +137,43 @@ body{
 
 </div>
 
-</body>
+<script>
 
+const video=document.getElementById("camera");
+
+async function startCamera(){
+
+    try{
+
+        const stream=await navigator.mediaDevices.getUserMedia({
+
+            video:{
+                facingMode:{
+                    ideal:"environment"
+                }
+            },
+
+            audio:false
+
+        });
+
+        video.srcObject=stream;
+
+    }
+
+    catch(err){
+
+        alert("Camera permission denied.\n\n"+err.message);
+
+        console.error(err);
+
+    }
+
+}
+
+startCamera();
+
+</script>
+
+</body>
 </html>
