@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Hand Landmarker — Step 3A</title>
+<title>Hand Landmarker — Step 3B (Selector Movement)</title>
 <style>
   :root {
     --cyan: #00e5ff;
@@ -107,8 +107,6 @@
 
   /* =========================================================
      HUD — TOP LAYER (above everything).
-     Replace the contents of #hud below with your existing
-     PIN-authentication HUD markup. Keep z-index: 100.
      ========================================================= */
   #hud{
     position:fixed;
@@ -163,6 +161,17 @@
     color:white;
     font-size:38px;
     z-index:2;
+
+    transition:transform .12s ease, color .12s ease, text-shadow .12s ease;
+}
+
+/* Nearest digit under the selector */
+.number.active{
+    color:#fff;
+    transform:scale(1.35);
+    text-shadow:
+        0 0 14px #6da8ff,
+        0 0 26px #a66cff;
 }
 
 #selector{
@@ -182,6 +191,8 @@
         0 0 45px #a66cff;
 
     z-index:1;
+
+    will-change:left;
 }
 </style>
 </head>
@@ -200,7 +211,7 @@
   <!-- Boot / error message -->
   <div id="boot">Starting camera…</div>
 
-  <!-- ===== YOUR EXISTING HUD GOES HERE (kept on top) ===== -->
+  <!-- ===== HUD (kept on top) ===== -->
  <div id="hud">
 
     <div id="pinDots">
@@ -243,6 +254,11 @@
   const statusEl = document.getElementById("status");
   const bootEl  = document.getElementById("boot");
 
+  // HUD / selector DOM
+  const railEl     = document.getElementById("rail");
+  const selectorEl = document.getElementById("selector");
+  const numberEls  = Array.from(railEl.querySelectorAll(".number"));
+
   // ---------- State ----------
   let handLandmarker = null;
   let debugOn = false;
@@ -256,6 +272,79 @@
 
   // Hand connections (official constant from the Tasks Vision API)
   const CONNECTIONS = HandLandmarker.HAND_CONNECTIONS;
+
+  // ---------- Selector movement state ----------
+  const SMOOTH = 0.22;          // glide easing (0 = frozen, 1 = instant snap)
+  const WRIST = 0;              // landmark index 0 = wrist (drives position)
+
+  let curLeft = 8;             // current selector left (px, within rail)
+  let targetLeft = 8;         // target selector left (px)
+  let minLeft = 8;
+  let maxLeft = 8;
+  let selectorW = 74;
+  let lastActive = -1;         // currently highlighted digit index
+
+  // Cover-fit transform of the camera frame onto the viewport
+  const geom = { displayedW: 0, offsetX: 0 };
+  const numberCenters = [];    // digit centers within the rail (px)
+
+  // Recompute all layout-dependent geometry (call on start + resize)
+  function computeGeometry() {
+    if (!video.videoWidth) return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // object-fit: cover -> scale by the larger ratio, then center
+    const scale = Math.max(vw / video.videoWidth, vh / video.videoHeight);
+    geom.displayedW = video.videoWidth * scale;
+    geom.offsetX = (vw - geom.displayedW) / 2;
+
+    selectorW = selectorEl.offsetWidth;
+    minLeft = 8;
+    maxLeft = railEl.clientWidth - selectorW - 8;
+
+    numberCenters.length = 0;
+    for (const n of numberEls) {
+      numberCenters.push(n.offsetLeft + n.offsetWidth / 2);
+    }
+  }
+
+  // Map the wrist's on-screen horizontal position to a selector target
+  function updateSelectorTarget(wrist) {
+    const railBox = railEl.getBoundingClientRect();
+
+    // wrist.x is normalized to the camera frame -> convert to screen px
+    const screenX = geom.offsetX + wrist.x * geom.displayedW;
+
+    // convert screen px -> selector "left" inside the rail's padding box
+    let left = screenX - (railBox.left + railEl.clientLeft) - selectorW / 2;
+
+    if (left < minLeft) left = minLeft;
+    if (left > maxLeft) left = maxLeft;
+    targetLeft = left;
+  }
+
+  // Smoothly glide the selector and highlight the nearest digit (every frame)
+  function animateSelector() {
+    curLeft += (targetLeft - curLeft) * SMOOTH;
+    selectorEl.style.left = curLeft + "px";
+
+    const center = curLeft + selectorW / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < numberCenters.length; i++) {
+      const d = Math.abs(numberCenters[i] - center);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+
+    // Only touch the DOM when the active digit actually changes
+    if (best !== lastActive) {
+      if (lastActive >= 0) numberEls[lastActive].classList.remove("active");
+      numberEls[best].classList.add("active");
+      lastActive = best;
+    }
+  }
 
   // ---------- Debug toggle ----------
   debugBtn.addEventListener("click", () => {
@@ -320,11 +409,19 @@
       fpsTimer = now;
     }
 
+    // --- Selector movement (runs regardless of Debug) ---
+    const hands = latestResult && latestResult.landmarks ? latestResult.landmarks : null;
+    if (hands && hands.length > 0) {
+      updateSelectorTarget(hands[0][WRIST]); // wrist drives the target
+    }
+    // If no hand: target is held, selector eases to rest at last position.
+    animateSelector();
+
     draw();
     requestAnimationFrame(loop);
   }
 
-  // ---------- Draw ----------
+  // ---------- Draw (debug overlay only) ----------
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -389,8 +486,13 @@
     statusEl.textContent =
       "STATUS: " + (detected ? "HAND DETECTED" : "NO HAND") + "\n" +
       "FPS: " + fps + "\n" +
-      "HANDS: " + (detected ? 1 : 0);
+      "HANDS: " + (detected ? 1 : 0) + "\n" +
+      "SELECTED: " + (lastActive >= 0 ? lastActive : "-");
   }
+
+  // ---------- Resize ----------
+  window.addEventListener("resize", computeGeometry);
+  window.addEventListener("orientationchange", () => setTimeout(computeGeometry, 300));
 
   // ---------- Boot ----------
   (async function boot() {
@@ -400,6 +502,11 @@
 
       bootEl.textContent = "Loading MediaPipe…";
       await initHandLandmarker();
+
+      // Selector geometry now that the camera size is known
+      computeGeometry();
+      curLeft = targetLeft = minLeft;
+      selectorEl.style.left = curLeft + "px";
 
       bootEl.style.display = "none";
       requestAnimationFrame(loop);
