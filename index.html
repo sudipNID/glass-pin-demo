@@ -2,240 +2,131 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Glass PIN Demo</title>
-
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>MediaPipe Hand Landmarker Demo</title>
 <style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Arial, Helvetica, sans-serif;
-}
-
-body{
-    background:#000;
-    overflow:hidden;
-    height:100vh;
-}
-
-/* Rear Camera */
-#camera{
-    position:fixed;
-    inset:0;
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    z-index:0;
-}
-
-/* Dark overlay to simulate glasses */
-#overlay{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,.75);
-    z-index:1;
-}
-
-/* HUD */
+html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,sans-serif}
+video,canvas{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+#overlay{pointer-events:none}
 #hud{
-    position:fixed;
-    inset:0;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    align-items:center;
-    gap:35px;
-    z-index:2;
+position:fixed;top:12px;left:12px;z-index:10;
+background:rgba(0,0,0,.55);color:#fff;padding:10px 12px;
+border-radius:8px;font-size:14px
 }
-
-#pinDots{
-    display:flex;
-    gap:18px;
-}
-
-.dot{
-    width:16px;
-    height:16px;
-    border-radius:50%;
-    border:2px solid #8aa9ff;
-}
-
-#rail{
-    position:relative;
-    width:min(92vw,900px);
-    height:90px;
-    border-radius:45px;
-    border:2px solid rgba(130,170,255,.7);
-    background:rgba(255,255,255,.05);
-    backdrop-filter:blur(10px);
-
-    display:flex;
-    justify-content:space-evenly;
-    align-items:center;
-
-    box-shadow:
-        0 0 20px rgba(90,160,255,.35);
-}
-
-.number{
-    color:white;
-    font-size:38px;
-    z-index:2;
-}
-
-#selector{
-    position:absolute;
-    left:8px;
-    width:74px;
-    height:74px;
-    border-radius:24px;
-
-    background:linear-gradient(180deg,#6db8ff,#b06dff);
-
-    box-shadow:
-        0 0 25px #6da8ff,
-        0 0 45px #a66cff;
-
-    z-index:1;
-}
+button{margin-top:8px}
 </style>
-
 </head>
-
 <body>
-
 <video id="camera" autoplay playsinline muted></video>
+<canvas id="overlay"></canvas>
 
-<canvas id="outputCanvas"></canvas>
-
-#outputCanvas{
-
-position:fixed;
-
-inset:0;
-
-width:100%;
-
-height:100%;
-
-z-index:1;
-
-pointer-events:none;
-
-}
-
-<div id="overlay"></div>
-
+<!-- Preserve/extend your HUD here -->
 <div id="hud">
-
-    <div id="pinDots">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-    </div>
-
-    <div id="rail">
-
-        <div id="selector"></div>
-
-        <div class="number">0</div>
-        <div class="number">1</div>
-        <div class="number">2</div>
-        <div class="number">3</div>
-        <div class="number">4</div>
-        <div class="number">5</div>
-        <div class="number">6</div>
-        <div class="number">7</div>
-        <div class="number">8</div>
-        <div class="number">9</div>
-
-    </div>
-
+<div><strong>Hand Landmarker Demo</strong></div>
+<div id="status">Loading…</div>
+<button id="debugBtn">Debug: OFF</button>
 </div>
 
-<script>
+<script type="module">
+import {FilesetResolver, HandLandmarker} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22";
 
 const video=document.getElementById("camera");
+const canvas=document.getElementById("overlay");
+const ctx=canvas.getContext("2d");
+const statusEl=document.getElementById("status");
+const debugBtn=document.getElementById("debugBtn");
 
-async function startCamera(){
+let debug=false;
+debugBtn.onclick=()=>{
+  debug=!debug;
+  debugBtn.textContent=`Debug: ${debug?"ON":"OFF"}`;
+};
 
-    try{
+function resize(){
+  canvas.width=innerWidth;
+  canvas.height=innerHeight;
+}
+addEventListener("resize",resize);
+resize();
 
-        const stream=await navigator.mediaDevices.getUserMedia({
+async function init(){
+  const stream=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{ideal:"environment"}},
+    audio:false
+  });
+  video.srcObject=stream;
+  await video.play();
 
-            video:{
-                facingMode:{
-                    ideal:"environment"
-                }
-            },
+  const vision=await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
+  );
 
-            audio:false
+  const handLandmarker=await HandLandmarker.createFromOptions(vision,{
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+    },
+    runningMode:"VIDEO",
+    numHands:2
+  });
 
-        });
+  statusEl.textContent="Running";
 
-        video.srcObject=stream;
+  function render(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
+    const res=handLandmarker.detectForVideo(video,performance.now());
+
+    if(res.landmarks){
+      for(const hand of res.landmarks){
+        for(const p of hand){
+          const x=p.x*canvas.width;
+          const y=p.y*canvas.height;
+          ctx.beginPath();
+          ctx.arc(x,y,5,0,Math.PI*2);
+          ctx.fillStyle="#00ffff";
+          ctx.shadowColor="#00ffff";
+          ctx.shadowBlur=15;
+          ctx.fill();
+        }
+
+        const edges=[
+          [0,1],[1,2],[2,3],[3,4],
+          [0,5],[5,6],[6,7],[7,8],
+          [5,9],[9,10],[10,11],[11,12],
+          [9,13],[13,14],[14,15],[15,16],
+          [13,17],[17,18],[18,19],[19,20],
+          [0,17]
+        ];
+        ctx.strokeStyle="#00ffff";
+        ctx.lineWidth=3;
+        ctx.shadowColor="#00ffff";
+        ctx.shadowBlur=12;
+        for(const [a,b] of edges){
+          ctx.beginPath();
+          ctx.moveTo(hand[a].x*canvas.width,hand[a].y*canvas.height);
+          ctx.lineTo(hand[b].x*canvas.width,hand[b].y*canvas.height);
+          ctx.stroke();
+        }
+
+        if(debug){
+          ctx.shadowBlur=0;
+          ctx.fillStyle="#fff";
+          hand.forEach((p,i)=>{
+            ctx.fillText(String(i),p.x*canvas.width+6,p.y*canvas.height-6);
+          });
+        }
+      }
     }
 
-    catch(err){
-
-        alert("Camera permission denied.\n\n"+err.message);
-
-        console.error(err);
-
-    }
-
+    requestAnimationFrame(render);
+  }
+  render();
 }
 
-startCamera();
-
+init().catch(e=>{
+  console.error(e);
+  statusEl.textContent="Error: "+e.message;
+});
 </script>
-
-
-
-<script type="module">
-
-import {
-FilesetResolver,
-HandLandmarker
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm";
-
-let handLandmarker;
-let running = false;
-
-async function initMediaPipe(){
-
-    const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
-    );
-
-    handLandmarker =
-        await HandLandmarker.createFromOptions(
-            vision,
-            {
-
-                baseOptions:{
-                    modelAssetPath:
-                    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
-                },
-
-                runningMode:"VIDEO",
-
-                numHands:1
-
-            });
-
-    running = true;
-
-    console.log("✅ MediaPipe Ready");
-
-}
-
-initMediaPipe();
-
-</script>
-
 </body>
 </html>
