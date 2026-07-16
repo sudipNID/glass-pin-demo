@@ -110,15 +110,79 @@
      Replace the contents of #hud below with your existing
      PIN-authentication HUD markup. Keep z-index: 100.
      ========================================================= */
-  #hud {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    pointer-events: none; /* container ignores touches... */
-  }
-  #hud .hud-panel {
-    pointer-events: auto; /* ...but interactive children accept them */
-  }
+  #hud{
+    position:fixed;
+    inset:0;
+
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    gap:35px;
+
+    z-index:100;
+
+    pointer-events:none;
+}
+
+#pinDots{
+    display:flex;
+    gap:18px;
+}
+
+.dot{
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    border:2px solid #8aa9ff;
+}
+
+#rail{
+    position:relative;
+
+    width:min(92vw,900px);
+    height:90px;
+
+    border-radius:45px;
+
+    border:2px solid rgba(130,170,255,.7);
+
+    background:rgba(255,255,255,.05);
+
+    backdrop-filter:blur(10px);
+
+    display:flex;
+    justify-content:space-evenly;
+    align-items:center;
+
+    box-shadow:
+        0 0 20px rgba(90,160,255,.35);
+}
+
+.number{
+    color:white;
+    font-size:38px;
+    z-index:2;
+}
+
+#selector{
+    position:absolute;
+
+    left:8px;
+
+    width:74px;
+    height:74px;
+
+    border-radius:24px;
+
+    background:linear-gradient(180deg,#6db8ff,#b06dff);
+
+    box-shadow:
+        0 0 25px #6da8ff,
+        0 0 45px #a66cff;
+
+    z-index:1;
+}
 </style>
 </head>
 <body>
@@ -137,10 +201,33 @@
   <div id="boot">Starting camera…</div>
 
   <!-- ===== YOUR EXISTING HUD GOES HERE (kept on top) ===== -->
-  <div id="hud">
-    <!-- Paste your PIN-authentication HUD here. Placeholder below: -->
-    <!-- <div class="hud-panel"> ... your PIN pad ... </div> -->
-  </div>
+ <div id="hud">
+
+    <div id="pinDots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+    </div>
+
+    <div id="rail">
+
+        <div id="selector"></div>
+
+        <div class="number">0</div>
+        <div class="number">1</div>
+        <div class="number">2</div>
+        <div class="number">3</div>
+        <div class="number">4</div>
+        <div class="number">5</div>
+        <div class="number">6</div>
+        <div class="number">7</div>
+        <div class="number">8</div>
+        <div class="number">9</div>
+
+    </div>
+
+</div>
 
 <script type="module">
   import {
