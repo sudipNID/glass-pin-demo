@@ -347,6 +347,106 @@
     transition:transform 120ms cubic-bezier(0.34,1.2,0.64,1);
     will-change:transform;
 }
+
+  /* =========================================================
+     PINCH AUTHENTICATION (additions only)
+     ========================================================= */
+
+  /* Filled PIN dot */
+  .dot{
+    transition:background 180ms ease, box-shadow 180ms ease,
+               border-color 180ms ease, transform 180ms ease;
+  }
+  .dot.filled{
+    background:linear-gradient(180deg,#6db8ff,#b06dff);
+    border-color:#b9d0ff;
+    box-shadow:0 0 12px rgba(109,184,255,.75),
+               0 0 22px rgba(176,109,255,.45);
+    transform:scale(1.14);
+  }
+
+  /* Selector pulse on pinch (no transform — position uses translate3d) */
+  @keyframes selPulse{
+    0%   { box-shadow:0 0 14px rgba(109,184,255,.55), 0 0 26px rgba(176,109,255,.35); filter:brightness(1); }
+    45%  { box-shadow:0 0 28px rgba(160,210,255,.95), 0 0 54px rgba(200,150,255,.70); filter:brightness(1.35); }
+    100% { box-shadow:0 0 14px rgba(109,184,255,.55), 0 0 26px rgba(176,109,255,.35); filter:brightness(1); }
+  }
+  #selector.pulse{ animation:selPulse 220ms ease; }
+
+  /* Selected digit pop on pinch */
+  @keyframes numPop{
+    0%   { transform:scale(1.35); }
+    40%  { transform:scale(1.72); }
+    100% { transform:scale(1.35); }
+  }
+  .number.pop{ animation:numPop 220ms ease; }
+
+  /* HUD dims slightly behind the success card */
+  #hud.revealed.dim{ opacity:.32; }
+
+  /* Success card */
+  #successCard{
+    position:fixed;
+    left:50%; top:50%;
+    z-index:150;
+
+    width:min(86vw,360px);
+    padding:30px 26px 24px;
+
+    text-align:center;
+
+    border-radius:26px;
+    border:1px solid rgba(130,170,255,.45);
+    background:rgba(10,12,22,.72);
+    backdrop-filter:blur(14px);
+    box-shadow:0 18px 50px rgba(60,80,200,.45),
+               inset 0 0 0 1px rgba(255,255,255,.06);
+
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none;
+    transform:translate(-50%,-50%) scale(.94);
+    transition:opacity 220ms ease, transform 220ms ease, visibility 220ms;
+  }
+  #successCard.show{
+    opacity:1;
+    visibility:visible;
+    pointer-events:auto;
+    transform:translate(-50%,-50%) scale(1);
+  }
+
+  #successCard .check{
+    width:58px; height:58px;
+    margin:0 auto 16px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:28px; color:#fff;
+    background:linear-gradient(180deg,#6db8ff,#b06dff);
+    box-shadow:0 0 18px rgba(109,184,255,.6),
+               0 0 34px rgba(176,109,255,.4);
+  }
+  #successCard .title{
+    color:#fff; font-size:19px; font-weight:600; letter-spacing:.2px;
+  }
+  #successCard .sub{
+    margin-top:6px;
+    color:#c7cdf2; font-size:14px; font-weight:500;
+  }
+  #resetBtn{
+    margin-top:22px;
+    padding:13px 40px;
+    font-size:15px; font-weight:600; letter-spacing:.5px;
+    color:#fff;
+    border:none;
+    border-radius:34px;
+    background:linear-gradient(100deg,#22b8c9 0%,#4a86ff 48%,#9a5cff 100%);
+    box-shadow:0 10px 26px rgba(90,110,240,.45), inset 0 0 0 1px rgba(255,255,255,.10);
+    transition:transform 150ms ease, box-shadow 150ms ease;
+  }
+  #resetBtn:active{
+    transform:scale(.96);
+    box-shadow:0 6px 18px rgba(90,110,240,.40);
+  }
 </style>
 </head>
 <body>
@@ -421,6 +521,14 @@
 
 </div>
 
+  <!-- ===== SUCCESS CARD (pinch authentication) ===== -->
+  <div id="successCard">
+    <div class="check">&#10003;</div>
+    <div class="title">Authentication Successful</div>
+    <div class="sub">Ready for Payment</div>
+    <button id="resetBtn">Reset</button>
+  </div>
+
 <script type="module">
   import {
     FilesetResolver,
@@ -445,6 +553,11 @@
   const selectorEl = document.getElementById("selector");
   const numberEls  = Array.from(railEl.querySelectorAll(".number"));
 
+  // PIN / success DOM
+  const dotEls     = Array.from(document.querySelectorAll("#pinDots .dot"));
+  const successEl  = document.getElementById("successCard");
+  const resetBtn   = document.getElementById("resetBtn");
+
   // ---------- State ----------
   let handLandmarker = null;
   let debugOn = false;
@@ -465,6 +578,20 @@
   let currentIndex = -1;       // digit the selector is snapped to
   const geom = { displayedW: 0, offsetX: 0 };
   const numberCenters = [];    // digit centres within the rail (px)
+
+  // ---------- Pinch / PIN state ----------
+  const THUMB_TIP = 4;         // landmark 4  = thumb tip
+  const INDEX_TIP = 8;         // landmark 8  = index fingertip
+  const PINCH_ON   = 0.055;    // close  -> PINCHED  (normalized)
+  const PINCH_OFF  = 0.080;    // release -> OPEN    (hysteresis, prevents flicker)
+  const PINCH_COOLDOWN = 300;  // ms, extra debounce between accepted pinches
+  const PIN_LENGTH = 4;
+
+  let isPinched   = false;     // current pinch state
+  let pinchDist   = 0;         // last measured distance (debug readout)
+  let lastPinchAt = 0;         // timestamp of last accepted pinch
+  let enteredPin  = [];        // digits entered so far
+  let authDone    = false;     // true once 4 digits are in (ignores further pinches)
 
   function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -530,6 +657,100 @@
     selectorEl.style.transform = "translate3d(" + x + "px,0,0)";
   }
 
+  // ---------- Pinch detection ----------
+  // Distance is measured in screen-proportional units: y is scaled by the
+  // frame aspect ratio so the threshold behaves the same horizontally
+  // and vertically, regardless of camera resolution.
+  function pinchDistance(lm) {
+    const a = lm[THUMB_TIP];
+    const b = lm[INDEX_TIP];
+    const aspect = (video.videoHeight || 720) / (video.videoWidth || 1280);
+    const dx = a.x - b.x;
+    const dy = (a.y - b.y) * aspect;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // Called every frame while a hand is present.
+  function handlePinch(lm) {
+    pinchDist = pinchDistance(lm);
+
+    if (!isPinched) {
+      // OPEN -> PINCHED  (rising edge = exactly one digit)
+      if (pinchDist < PINCH_ON) {
+        isPinched = true;
+        const now = performance.now();
+        if (now - lastPinchAt > PINCH_COOLDOWN) {
+          lastPinchAt = now;
+          commitDigit();
+        }
+      }
+    } else {
+      // PINCHED -> OPEN  (must separate before another digit is allowed)
+      if (pinchDist > PINCH_OFF) {
+        isPinched = false;
+      }
+    }
+  }
+
+  // ---------- PIN entry ----------
+  function commitDigit() {
+    if (authDone) return;                    // ignore pinches after 4 digits
+    if (enteredPin.length >= PIN_LENGTH) return;
+    if (currentIndex < 0) return;            // nothing highlighted yet
+
+    enteredPin.push(currentIndex);
+
+    // Fill the corresponding PIN dot
+    const dot = dotEls[enteredPin.length - 1];
+    if (dot) dot.classList.add("filled");
+
+    // Pulse the selector
+    selectorEl.classList.remove("pulse");
+    void selectorEl.offsetWidth;             // restart the animation
+    selectorEl.classList.add("pulse");
+
+    // Pop the selected number
+    const numEl = numberEls[currentIndex];
+    if (numEl) {
+      numEl.classList.remove("pop");
+      void numEl.offsetWidth;
+      numEl.classList.add("pop");
+    }
+
+    // Light haptic feedback
+    if (navigator.vibrate) navigator.vibrate(18);
+
+    // Complete?
+    if (enteredPin.length === PIN_LENGTH) {
+      authDone = true;
+      setTimeout(showSuccess, 300);
+    }
+  }
+
+  function showSuccess() {
+    hudEl.classList.add("dim");
+    successEl.classList.add("show");
+    if (navigator.vibrate) navigator.vibrate([22, 60, 30]);
+  }
+
+  // ---------- Reset ----------
+  function resetPin() {
+    enteredPin = [];
+    authDone = false;
+    isPinched = false;
+    lastPinchAt = 0;
+
+    for (const d of dotEls) d.classList.remove("filled");
+
+    selectorEl.classList.remove("pulse");
+    for (const n of numberEls) n.classList.remove("pop");
+
+    successEl.classList.remove("show");
+    hudEl.classList.remove("dim");
+  }
+
+  resetBtn.addEventListener("click", resetPin);
+
   // ---------- Debug toggle ----------
   debugBtn.addEventListener("click", () => {
     debugOn = !debugOn;
@@ -589,12 +810,18 @@
       fpsTimer = now;
     }
 
-    // --- Selector: magnetic snap to nearest digit ---
+    // --- Selector: magnetic snap to nearest digit + pinch detection ---
     const hands = latestResult && latestResult.landmarks ? latestResult.landmarks : null;
     if (hands && hands.length > 0) {
-      moveToIndex(nearestIndexFromWrist(hands[0][WRIST]));
+      const lm = hands[0];
+      moveToIndex(nearestIndexFromWrist(lm[WRIST]));
+      handlePinch(lm);
+    } else {
+      // Hand lost: hold last snapped digit, reset pinch edge so the next
+      // pinch is registered cleanly.
+      isPinched = false;
+      pinchDist = 0;
     }
-    // If no hand: hold last snapped digit.
 
     draw();
     requestAnimationFrame(loop);
@@ -645,6 +872,19 @@
     }
     ctx.restore();
 
+    // Pinch line between thumb tip and index tip
+    ctx.save();
+    ctx.strokeStyle = isPinched ? "#b06dff" : "rgba(0,229,255,.55)";
+    ctx.lineWidth = isPinched ? 4 : 2;
+    ctx.setLineDash(isPinched ? [] : [6, 6]);
+    ctx.shadowColor = isPinched ? "#b06dff" : "#00e5ff";
+    ctx.shadowBlur = isPinched ? 14 : 6;
+    ctx.beginPath();
+    ctx.moveTo(lm[THUMB_TIP].x * w, lm[THUMB_TIP].y * h);
+    ctx.lineTo(lm[INDEX_TIP].x * w, lm[INDEX_TIP].y * h);
+    ctx.stroke();
+    ctx.restore();
+
     // Landmark IDs (0–20)
     ctx.save();
     ctx.shadowBlur = 0;
@@ -665,7 +905,10 @@
       "STATUS: " + (detected ? "HAND DETECTED" : "NO HAND") + "\n" +
       "FPS: " + fps + "\n" +
       "HANDS: " + (detected ? 1 : 0) + "\n" +
-      "SELECTED: " + (currentIndex >= 0 ? currentIndex : "-");
+      "SELECTED: " + (currentIndex >= 0 ? currentIndex : "-") + "\n" +
+      "PINCH DIST: " + (detected ? pinchDist.toFixed(3) : "-") + "\n" +
+      "PINCH: " + (isPinched ? "PINCHED" : "OPEN") + "\n" +
+      "PIN LEN: " + enteredPin.length + " / " + PIN_LENGTH;
   }
 
   // ---------- Resize ----------
