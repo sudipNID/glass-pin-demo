@@ -277,18 +277,26 @@
     height:16px;
     border-radius:50%;
     border:2px solid #8aa9ff;
+    transition:background 180ms ease, box-shadow 180ms ease,
+               border-color 180ms ease, transform 180ms ease;
+}
+.dot.filled{
+    background:linear-gradient(180deg,#6db8ff,#b06dff);
+    border-color:#b9d0ff;
+    box-shadow:0 0 12px rgba(109,184,255,.75),
+               0 0 22px rgba(176,109,255,.45);
+    transform:scale(1.14);
 }
 
 #rail{
     position:relative;
 
-    width:min(92vw,900px);
-    height:90px;
+    /* wider rail + generous inner padding: digits get room to breathe */
+    width:min(96vw,940px);
+    height:98px;
+    padding:0 10px;
 
-    /* increased inner padding so 0 and 9 aren't cramped */
-    padding:0 26px;
-
-    border-radius:45px;
+    border-radius:49px;
 
     border:2px solid rgba(130,170,255,.7);
 
@@ -297,23 +305,33 @@
     backdrop-filter:blur(10px);
 
     display:flex;
-    justify-content:space-evenly;
+    justify-content:space-between;
     align-items:center;
 
     box-shadow:
         0 0 20px rgba(90,160,255,.35);
 }
 
-.number{
+/* Every rail cell (backspace + digits 0–9) gets an equal share of the
+   rail width, so spacing stays even on any device. */
+.item{
+    flex:1 1 0;
+    text-align:center;
     color:white;
-    font-size:38px;
+    font-size:clamp(23px, 5.6vw, 36px);
+    font-weight:500;
+    line-height:1;
     z-index:2;
 
     transition:transform .12s ease, color .12s ease, text-shadow .12s ease;
 }
+.item.del{
+    color:#a9bfe8;
+    font-weight:600;
+}
 
-/* Nearest digit under the selector */
-.number.active{
+/* Highlighted cell under the selector */
+.item.active{
     color:#fff;
     transform:scale(1.35);
     text-shadow:
@@ -326,16 +344,15 @@
     left:0;
     top:50%;
 
-    /* slimmer pill: ~40% narrower, frames a single digit */
+    /* width is set from JS to match one rail cell exactly */
     width:44px;
-    height:60px;
-    margin-top:-30px;      /* vertically centre (half of height) */
+    height:64px;
+    margin-top:-32px;
 
-    border-radius:18px;    /* slightly reduced from 24px */
+    border-radius:18px;
 
     background:linear-gradient(180deg,#6db8ff,#b06dff);
 
-    /* slightly reduced glow, still premium */
     box-shadow:
         0 0 14px rgba(109,184,255,.55),
         0 0 26px rgba(176,109,255,.35);
@@ -349,37 +366,25 @@
 }
 
   /* =========================================================
-     PINCH AUTHENTICATION (additions only)
+     PINCH AUTHENTICATION
      ========================================================= */
 
-  /* Filled PIN dot */
-  .dot{
-    transition:background 180ms ease, box-shadow 180ms ease,
-               border-color 180ms ease, transform 180ms ease;
-  }
-  .dot.filled{
-    background:linear-gradient(180deg,#6db8ff,#b06dff);
-    border-color:#b9d0ff;
-    box-shadow:0 0 12px rgba(109,184,255,.75),
-               0 0 22px rgba(176,109,255,.45);
-    transform:scale(1.14);
-  }
-
-  /* Selector pulse on pinch (no transform — position uses translate3d) */
+  /* Selector pulse on commit (glow only — position uses translate3d) */
   @keyframes selPulse{
     0%   { box-shadow:0 0 14px rgba(109,184,255,.55), 0 0 26px rgba(176,109,255,.35); filter:brightness(1); }
     45%  { box-shadow:0 0 28px rgba(160,210,255,.95), 0 0 54px rgba(200,150,255,.70); filter:brightness(1.35); }
     100% { box-shadow:0 0 14px rgba(109,184,255,.55), 0 0 26px rgba(176,109,255,.35); filter:brightness(1); }
   }
-  #selector.pulse{ animation:selPulse 220ms ease; }
+  #selector.pulse{ animation:selPulse 260ms cubic-bezier(0.39,0.575,0.565,1); }
 
-  /* Selected digit pop on pinch */
-  @keyframes numPop{
-    0%   { transform:scale(1.35); }
-    40%  { transform:scale(1.72); }
-    100% { transform:scale(1.35); }
+  /* Commit spring-back: number releases from its pinched-down scale.
+     easeOutSine timing — noticeable but never jarring. */
+  @keyframes numCommit{
+    0%   { transform:scale(1.02); text-shadow:0 0 26px #8fc6ff, 0 0 48px #c39bff; }
+    45%  { transform:scale(1.56); text-shadow:0 0 22px #8fc6ff, 0 0 40px #c39bff; }
+    100% { transform:scale(1.35); text-shadow:0 0 14px #6da8ff, 0 0 26px #a66cff; }
   }
-  .number.pop{ animation:numPop 220ms ease; }
+  .item.commit{ animation:numCommit 260ms cubic-bezier(0.39,0.575,0.565,1); }
 
   /* HUD dims slightly behind the success card */
   #hud.revealed.dim{ opacity:.32; }
@@ -390,7 +395,7 @@
     left:50%; top:50%;
     z-index:150;
 
-    width:min(86vw,360px);
+    width:min(86vw,380px);
     padding:30px 26px 24px;
 
     text-align:center;
@@ -428,9 +433,28 @@
   #successCard .title{
     color:#fff; font-size:19px; font-weight:600; letter-spacing:.2px;
   }
-  #successCard .sub{
-    margin-top:6px;
-    color:#c7cdf2; font-size:14px; font-weight:500;
+  #successCard .nfc{
+    margin-top:12px;
+    display:inline-flex; align-items:center; gap:8px;
+    padding:7px 15px;
+    border-radius:20px;
+    border:1px solid rgba(130,170,255,.4);
+    background:rgba(109,184,255,.10);
+    color:#dbe6ff; font-size:13px; font-weight:600; letter-spacing:.4px;
+  }
+  #successCard .nfc .pip{
+    width:8px; height:8px; border-radius:50%;
+    background:#6db8ff;
+    box-shadow:0 0 8px #6db8ff;
+    animation:nfcPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes nfcPulse{
+    0%,100%{ opacity:.45; transform:scale(.85); }
+    50%    { opacity:1;   transform:scale(1.15); }
+  }
+  #successCard .hint{
+    margin-top:10px;
+    color:#aab3d8; font-size:13.5px; font-weight:500; line-height:1.45;
   }
   #resetBtn{
     margin-top:22px;
@@ -506,26 +530,28 @@
 
         <div id="selector"></div>
 
-        <div class="number">0</div>
-        <div class="number">1</div>
-        <div class="number">2</div>
-        <div class="number">3</div>
-        <div class="number">4</div>
-        <div class="number">5</div>
-        <div class="number">6</div>
-        <div class="number">7</div>
-        <div class="number">8</div>
-        <div class="number">9</div>
+        <div class="item del" data-value="del">&#8249;</div>
+        <div class="item" data-value="0">0</div>
+        <div class="item" data-value="1">1</div>
+        <div class="item" data-value="2">2</div>
+        <div class="item" data-value="3">3</div>
+        <div class="item" data-value="4">4</div>
+        <div class="item" data-value="5">5</div>
+        <div class="item" data-value="6">6</div>
+        <div class="item" data-value="7">7</div>
+        <div class="item" data-value="8">8</div>
+        <div class="item" data-value="9">9</div>
 
     </div>
 
 </div>
 
-  <!-- ===== SUCCESS CARD (pinch authentication) ===== -->
+  <!-- ===== SUCCESS CARD ===== -->
   <div id="successCard">
     <div class="check">&#10003;</div>
     <div class="title">Authentication Successful</div>
-    <div class="sub">Ready for Payment</div>
+    <div class="nfc"><span class="pip"></span>NFC READY</div>
+    <div class="hint">Tap ring or watch to POS</div>
     <button id="resetBtn">Reset</button>
   </div>
 
@@ -548,10 +574,10 @@
   const startBtn = document.getElementById("startBtn");
   const hudEl    = document.getElementById("hud");
 
-  // Selector DOM
+  // Rail DOM (index 0 = backspace, 1..10 = digits 0..9)
   const railEl     = document.getElementById("rail");
   const selectorEl = document.getElementById("selector");
-  const numberEls  = Array.from(railEl.querySelectorAll(".number"));
+  const itemEls    = Array.from(railEl.querySelectorAll(".item"));
 
   // PIN / success DOM
   const dotEls     = Array.from(document.querySelectorAll("#pinDots .dot"));
@@ -564,93 +590,201 @@
   let lastVideoTime = -1;
   let latestResult = null;
 
-  // FPS tracking (no per-frame allocations)
   let fps = 0;
   let frameCount = 0;
   let fpsTimer = performance.now();
 
-  // Hand connections (official constant from the Tasks Vision API)
   const CONNECTIONS = HandLandmarker.HAND_CONNECTIONS;
 
   // ---------- Selector state ----------
-  const WRIST = 0;             // landmark 0 = wrist (drives position)
-  let selectorW = 44;
-  let currentIndex = -1;       // digit the selector is snapped to
+  const WRIST = 0;
+
+  // --- Snapping + deadzone tuning ---
+  const SMOOTH_ALPHA   = 0.30;  // wrist smoothing (lower = steadier, laggier)
+  const DEADZONE_RATIO = 0.62;  // must travel this fraction of a cell before switching
+  const MIN_DWELL      = 110;   // ms, minimum time on a cell before it can change
+  const NOISE_PX       = 1.5;   // ignore sub-pixel wrist jitter
+
+  let selectorW    = 44;
+  let currentIndex = -1;
+  let smoothX      = null;      // smoothed wrist position inside the rail (px)
+  let lastRawX     = null;
+  let lastMoveAt   = 0;
+  let cellSpacing  = 40;
+
   const geom = { displayedW: 0, offsetX: 0 };
-  const numberCenters = [];    // digit centres within the rail (px)
+  const itemCenters = [];
 
   // ---------- Pinch / PIN state ----------
-  const THUMB_TIP = 4;         // landmark 4  = thumb tip
-  const INDEX_TIP = 8;         // landmark 8  = index fingertip
-  const PINCH_ON   = 0.055;    // close  -> PINCHED  (normalized)
-  const PINCH_OFF  = 0.080;    // release -> OPEN    (hysteresis, prevents flicker)
-  const PINCH_COOLDOWN = 300;  // ms, extra debounce between accepted pinches
+  const THUMB_TIP = 4;
+  const INDEX_TIP = 8;
+  const PINCH_ON   = 0.055;    // close  -> PINCHED
+  const PINCH_OFF  = 0.080;    // release -> OPEN (hysteresis)
+  const PINCH_COOLDOWN = 300;  // ms debounce between accepted pinches
   const PIN_LENGTH = 4;
 
-  let isPinched   = false;     // current pinch state
-  let pinchDist   = 0;         // last measured distance (debug readout)
-  let lastPinchAt = 0;         // timestamp of last accepted pinch
-  let enteredPin  = [];        // digits entered so far
-  let authDone    = false;     // true once 4 digits are in (ignores further pinches)
+  let isPinched   = false;
+  let pinchDist   = 0;
+  let pinchT      = 0;         // 0..1 approach intensity (drives the shrink)
+  let lastPinchAt = 0;
+  let enteredPin  = [];
+  let authDone    = false;
+  let scaledEl    = null;      // element currently carrying an inline pinch scale
 
   function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
 
-  // Recompute layout-dependent geometry (start + resize)
+  // ---------- Feedback: haptics + audio ----------
+  let audioCtx = null;
+
+  function initAudio() {
+    if (audioCtx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    } catch (e) { audioCtx = null; }
+  }
+
+  // Short synthesized blip. Replaceable later with real audio files.
+  function tone(freq, dur, gain, type, delay) {
+    if (!audioCtx) return;
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t0 = audioCtx.currentTime + (delay || 0);
+    const osc = audioCtx.createOscillator();
+    const g   = audioCtx.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  function vibrate(pattern) {
+    if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} }
+  }
+
+  // Digit change: light tick (low intensity)
+  function feedbackMove() {
+    vibrate(8);
+    tone(1180, 0.045, 0.05, "sine");
+  }
+  // Pinch commit: stronger thump + two-tone confirm
+  function feedbackCommit() {
+    vibrate(32);
+    tone(680, 0.075, 0.13, "triangle");
+    tone(1020, 0.085, 0.10, "sine", 0.045);
+  }
+  // Delete: low descending blip
+  function feedbackDelete() {
+    vibrate([14, 40, 14]);
+    tone(420, 0.075, 0.11, "triangle");
+    tone(280, 0.090, 0.09, "sine", 0.05);
+  }
+  // Success: short rising arpeggio
+  function feedbackSuccess() {
+    vibrate([24, 60, 34]);
+    tone(660, 0.11, 0.11, "sine", 0.00);
+    tone(880, 0.11, 0.11, "sine", 0.09);
+    tone(1320, 0.20, 0.12, "sine", 0.18);
+  }
+
+  // ---------- Geometry ----------
   function computeGeometry() {
     if (!video.videoWidth) return;
 
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // object-fit: cover -> scale by larger ratio, then centre
     const scale = Math.max(vw / video.videoWidth, vh / video.videoHeight);
     geom.displayedW = video.videoWidth * scale;
     geom.offsetX = (vw - geom.displayedW) / 2;
 
-    selectorW = selectorEl.offsetWidth;
-
-    numberCenters.length = 0;
-    for (const n of numberEls) {
-      numberCenters.push(n.offsetLeft + n.offsetWidth / 2);
+    itemCenters.length = 0;
+    for (const el of itemEls) {
+      itemCenters.push(el.offsetLeft + el.offsetWidth / 2);
     }
+
+    // Average spacing between adjacent cells (used by the deadzone)
+    if (itemCenters.length > 1) {
+      cellSpacing =
+        (itemCenters[itemCenters.length - 1] - itemCenters[0]) / (itemCenters.length - 1);
+    }
+
+    // Match the selector to one cell so it never overlaps neighbours
+    const cellW = itemEls[0] ? itemEls[0].offsetWidth : 44;
+    selectorW = clamp(Math.round(cellW - 6), 30, 62);
+    selectorEl.style.width = selectorW + "px";
   }
 
-  // Which digit is the wrist nearest to?
-  function nearestIndexFromWrist(wrist) {
+  // ---------- Selector: deadzone + snap ----------
+  function updateSelector(wrist) {
     const railBox = railEl.getBoundingClientRect();
     const screenX = geom.offsetX + wrist.x * geom.displayedW;
-    const centerInRail = screenX - (railBox.left + railEl.clientLeft);
+    const raw = screenX - (railBox.left + railEl.clientLeft);
 
+    // Reject sub-pixel jitter outright
+    if (lastRawX !== null && Math.abs(raw - lastRawX) < NOISE_PX) {
+      // still let the smoother settle, but don't chase noise
+    } else {
+      lastRawX = raw;
+    }
+
+    if (smoothX === null) smoothX = raw;
+    smoothX += (raw - smoothX) * SMOOTH_ALPHA;
+
+    // Nearest cell to the smoothed position
     let best = 0, bestDist = Infinity;
-    for (let i = 0; i < numberCenters.length; i++) {
-      const d = Math.abs(numberCenters[i] - centerInRail);
+    for (let i = 0; i < itemCenters.length; i++) {
+      const d = Math.abs(itemCenters[i] - smoothX);
       if (d < bestDist) { bestDist = d; best = i; }
     }
-    return best;
+
+    if (best === currentIndex) return;   // already locked on: nothing to do
+
+    // Deadzone: the hand must clear a band around the current cell before
+    // the selector will release and snap to the next one.
+    const fromCurrent = currentIndex >= 0
+      ? Math.abs(smoothX - itemCenters[currentIndex])
+      : Infinity;
+
+    const now = performance.now();
+    const cleared = fromCurrent > cellSpacing * DEADZONE_RATIO;
+    const dwelled = (now - lastMoveAt) > MIN_DWELL;
+
+    if (currentIndex < 0 || (cleared && dwelled)) {
+      lastMoveAt = now;
+      moveToIndex(best);
+    }
   }
 
-  // Snap the selector to a digit (magnetic 120ms CSS transition, GPU)
-  function moveToIndex(idx) {
-    if (idx === currentIndex) return; // don't restart the animation each frame
+  // Snap the selector to a cell (magnetic 120ms CSS transition, GPU)
+  function moveToIndex(idx, silent) {
+    if (idx === currentIndex) return;
     const prev = currentIndex;
     currentIndex = idx;
 
     const x = clamp(
-      numberCenters[idx] - selectorW / 2,
+      itemCenters[idx] - selectorW / 2,
       0,
       railEl.clientWidth - selectorW
     );
     selectorEl.style.transform = "translate3d(" + x + "px,0,0)";
 
-    if (prev >= 0) numberEls[prev].classList.remove("active");
-    numberEls[idx].classList.add("active");
+    if (prev >= 0) {
+      clearPinchScale();
+      itemEls[prev].classList.remove("active");
+    }
+    itemEls[idx].classList.add("active");
+
+    if (!silent) feedbackMove();   // haptic + tick on every digit change
   }
 
-  // Reposition without changing the active digit (after resize)
   function repositionSelector() {
     if (currentIndex < 0) return;
     const x = clamp(
-      numberCenters[currentIndex] - selectorW / 2,
+      itemCenters[currentIndex] - selectorW / 2,
       0,
       railEl.clientWidth - selectorW
     );
@@ -658,9 +792,6 @@
   }
 
   // ---------- Pinch detection ----------
-  // Distance is measured in screen-proportional units: y is scaled by the
-  // frame aspect ratio so the threshold behaves the same horizontally
-  // and vertically, regardless of camera resolution.
   function pinchDistance(lm) {
     const a = lm[THUMB_TIP];
     const b = lm[INDEX_TIP];
@@ -670,22 +801,52 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // Called every frame while a hand is present.
+  function clearPinchScale() {
+    if (scaledEl) {
+      scaledEl.style.transform = "";
+      scaledEl.style.textShadow = "";
+      scaledEl = null;
+    }
+  }
+
+  // Continuous shrink as the fingers close, with an easeInSine response so the
+  // motion stays gentle early and firms up right before the commit.
+  function applyPinchScale(t) {
+    const el = itemEls[currentIndex];
+    if (!el) return;
+
+    if (t <= 0.001) { clearPinchScale(); return; }
+
+    const eased = 1 - Math.cos((t * Math.PI) / 2);   // easeInSine
+    const scale = 1.35 - 0.33 * eased;               // 1.35 -> ~1.02
+    const glowA = 14 + 14 * eased;
+    const glowB = 26 + 24 * eased;
+
+    el.style.transform  = "scale(" + scale.toFixed(3) + ")";
+    el.style.textShadow = "0 0 " + glowA.toFixed(0) + "px #8fc6ff, 0 0 " +
+                          glowB.toFixed(0) + "px #c39bff";
+    scaledEl = el;
+  }
+
   function handlePinch(lm) {
     pinchDist = pinchDistance(lm);
 
+    // Approach intensity for the shrink animation
+    pinchT = clamp((PINCH_OFF - pinchDist) / (PINCH_OFF - PINCH_ON), 0, 1);
+
     if (!isPinched) {
-      // OPEN -> PINCHED  (rising edge = exactly one digit)
+      applyPinchScale(pinchT);   // shrinking as fingers close
+
       if (pinchDist < PINCH_ON) {
         isPinched = true;
         const now = performance.now();
         if (now - lastPinchAt > PINCH_COOLDOWN) {
           lastPinchAt = now;
-          commitDigit();
+          commitSelection();
         }
       }
     } else {
-      // PINCHED -> OPEN  (must separate before another digit is allowed)
+      // Held closed: let the commit animation play, don't fight it
       if (pinchDist > PINCH_OFF) {
         isPinched = false;
       }
@@ -693,34 +854,45 @@
   }
 
   // ---------- PIN entry ----------
-  function commitDigit() {
-    if (authDone) return;                    // ignore pinches after 4 digits
+  function commitSelection() {
+    if (authDone) return;
+    if (currentIndex < 0) return;
+
+    const el = itemEls[currentIndex];
+    const value = el.dataset.value;
+
+    // Release the inline shrink so the keyframe spring-back reads cleanly
+    clearPinchScale();
+
+    // Selector pulse
+    selectorEl.classList.remove("pulse");
+    void selectorEl.offsetWidth;
+    selectorEl.classList.add("pulse");
+
+    // Number spring-back (easeOutSine)
+    el.classList.remove("commit");
+    void el.offsetWidth;
+    el.classList.add("commit");
+
+    if (value === "del") {
+      if (enteredPin.length > 0) {
+        enteredPin.pop();
+        dotEls[enteredPin.length].classList.remove("filled");
+        feedbackDelete();
+      } else {
+        feedbackDelete();
+      }
+      return;
+    }
+
     if (enteredPin.length >= PIN_LENGTH) return;
-    if (currentIndex < 0) return;            // nothing highlighted yet
 
-    enteredPin.push(currentIndex);
-
-    // Fill the corresponding PIN dot
+    enteredPin.push(value);
     const dot = dotEls[enteredPin.length - 1];
     if (dot) dot.classList.add("filled");
 
-    // Pulse the selector
-    selectorEl.classList.remove("pulse");
-    void selectorEl.offsetWidth;             // restart the animation
-    selectorEl.classList.add("pulse");
+    feedbackCommit();
 
-    // Pop the selected number
-    const numEl = numberEls[currentIndex];
-    if (numEl) {
-      numEl.classList.remove("pop");
-      void numEl.offsetWidth;
-      numEl.classList.add("pop");
-    }
-
-    // Light haptic feedback
-    if (navigator.vibrate) navigator.vibrate(18);
-
-    // Complete?
     if (enteredPin.length === PIN_LENGTH) {
       authDone = true;
       setTimeout(showSuccess, 300);
@@ -730,7 +902,7 @@
   function showSuccess() {
     hudEl.classList.add("dim");
     successEl.classList.add("show");
-    if (navigator.vibrate) navigator.vibrate([22, 60, 30]);
+    feedbackSuccess();
   }
 
   // ---------- Reset ----------
@@ -738,12 +910,14 @@
     enteredPin = [];
     authDone = false;
     isPinched = false;
+    pinchT = 0;
     lastPinchAt = 0;
 
+    clearPinchScale();
     for (const d of dotEls) d.classList.remove("filled");
 
     selectorEl.classList.remove("pulse");
-    for (const n of numberEls) n.classList.remove("pop");
+    for (const el of itemEls) el.classList.remove("commit");
 
     successEl.classList.remove("show");
     hudEl.classList.remove("dim");
@@ -765,7 +939,7 @@
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {
-        facingMode: { ideal: "environment" }, // rear camera
+        facingMode: { ideal: "environment" },
         width:  { ideal: 1280 },
         height: { ideal: 720 }
       }
@@ -801,7 +975,6 @@
       latestResult = handLandmarker.detectForVideo(video, performance.now());
     }
 
-    // FPS
     frameCount++;
     const now = performance.now();
     if (now - fpsTimer >= 1000) {
@@ -810,17 +983,17 @@
       fpsTimer = now;
     }
 
-    // --- Selector: magnetic snap to nearest digit + pinch detection ---
     const hands = latestResult && latestResult.landmarks ? latestResult.landmarks : null;
     if (hands && hands.length > 0) {
       const lm = hands[0];
-      moveToIndex(nearestIndexFromWrist(lm[WRIST]));
+      updateSelector(lm[WRIST]);
       handlePinch(lm);
     } else {
-      // Hand lost: hold last snapped digit, reset pinch edge so the next
-      // pinch is registered cleanly.
+      // Hand lost: hold the current cell, reset the pinch edge cleanly
       isPinched = false;
       pinchDist = 0;
+      pinchT = 0;
+      clearPinchScale();
     }
 
     draw();
@@ -901,12 +1074,14 @@
 
   // ---------- Debug readout ----------
   function updateStatus(detected) {
+    const sel = currentIndex >= 0 ? itemEls[currentIndex].dataset.value : "-";
     statusEl.textContent =
       "STATUS: " + (detected ? "HAND DETECTED" : "NO HAND") + "\n" +
       "FPS: " + fps + "\n" +
       "HANDS: " + (detected ? 1 : 0) + "\n" +
-      "SELECTED: " + (currentIndex >= 0 ? currentIndex : "-") + "\n" +
+      "SELECTED: " + sel + "\n" +
       "PINCH DIST: " + (detected ? pinchDist.toFixed(3) : "-") + "\n" +
+      "PINCH T: " + pinchT.toFixed(2) + "\n" +
       "PINCH: " + (isPinched ? "PINCHED" : "OPEN") + "\n" +
       "PIN LEN: " + enteredPin.length + " / " + PIN_LENGTH;
   }
@@ -918,26 +1093,22 @@
 
   // ---------- Start Demo (splash -> camera -> MediaPipe -> reveal HUD) ----------
   startBtn.addEventListener("click", () => {
-    // 1) Fade the splash out over 500ms
+    initAudio();                 // unlock WebAudio inside the user gesture
     splashEl.style.opacity = "0";
 
     setTimeout(async () => {
       splashEl.style.display = "none";
       bootEl.style.display = "block";
       try {
-        // 2) Initialize the camera
         bootEl.textContent = "Starting camera…";
         await startCamera();
 
-        // 3) Start MediaPipe
         bootEl.textContent = "Loading MediaPipe…";
         await initHandLandmarker();
 
-        // Selector geometry + initial position
         computeGeometry();
-        moveToIndex(0);
+        moveToIndex(1, true);    // start on digit 0 (index 1), silent
 
-        // 4) Reveal the existing PIN HUD
         hudEl.classList.add("revealed");
 
         bootEl.style.display = "none";
